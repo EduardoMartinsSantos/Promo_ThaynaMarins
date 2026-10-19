@@ -1,0 +1,16 @@
+[Unit]
+Description=Robo-Promo - Worker (scraper + envio WhatsApp)
+After=network-online.target robopromo-bridge.service
+Wants=network-online.target
+Requires=robopromo-bridge.service
+
+[Service]
+Type=simple
+User=robopromo
+WorkingDirectory=/opt/robopromo
+ExecStart=/opt/robopromo/.venv/bin/python run_local.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

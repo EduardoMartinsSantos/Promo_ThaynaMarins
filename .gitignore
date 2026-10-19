@@ -1,0 +1,29 @@
+# Segredos e estado local — nunca versionar
+.env
+whatsapp-bridge/.env
+whatsapp-bridge/auth_info/
+whatsapp-bridge/qr.png
+robopromo.db
+robopromo.tar.gz
+
+# Dependências
+whatsapp-bridge/node_modules/
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# Logs e runtime
+logs/
+*.log
+
+# Config local do Claude Code (settings.json compartilhado fica, o local não)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

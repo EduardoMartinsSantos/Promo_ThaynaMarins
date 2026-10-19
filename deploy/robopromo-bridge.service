@@ -1,0 +1,15 @@
+[Unit]
+Description=Robo-Promo - Bridge WhatsApp (Baileys)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=robopromo
+WorkingDirectory=/opt/robopromo/whatsapp-bridge
+ExecStart=/usr/bin/node index.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

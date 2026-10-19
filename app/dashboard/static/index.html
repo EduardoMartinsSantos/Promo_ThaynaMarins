@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robo-Promo — Configuração</title>
+<style>
+  :root {
+    --bg: #0f1115; --card: #1a1d24; --border: #2a2e37;
+    --text: #e6e8eb; --muted: #9aa1ac; --accent: #ffd400;
+    --ml: #ffe600; --shopee: #ee4d2d; --ok: #3ecf8e; --err: #ff5c5c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    padding: 24px 16px 80px;
+  }
+  main { max-width: 720px; margin: 0 auto; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  p.sub { color: var(--muted); margin: 0 0 24px; font-size: 0.9rem; }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 20px; margin-bottom: 20px;
+  }
+  .card h2 {
+    font-size: 1.05rem; margin: 0 0 4px; display: flex;
+    align-items: center; gap: 8px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot.ml { background: var(--ml); }
+  .dot.shopee { background: var(--shopee); }
+  .dot.whatsapp { background: #25d366; }
+  .card p.hint { color: var(--muted); font-size: 0.82rem; margin: 0 0 16px; }
+  .card p.hint a { color: var(--accent); text-decoration: none; }
+  label {
+    display: block; font-size: 0.82rem; color: var(--muted);
+    margin: 14px 0 6px;
+  }
+  input {
+    width: 100%; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: #11131a; color: var(--text);
+    font-size: 0.95rem;
+  }
+  input:focus, textarea:focus { outline: none; border-color: var(--accent); }
+  input::placeholder, textarea::placeholder { color: #5a606b; }
+  textarea {
+    width: 100%; padding: 10px 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: #11131a; color: var(--text);
+    font-size: 0.85rem; font-family: ui-monospace, Consolas, monospace;
+    resize: vertical; min-height: 64px;
+  }
+  button.test {
+    margin-top: 14px; padding: 9px 14px; border-radius: 8px;
+    border: 1px solid var(--border); background: transparent; color: var(--text);
+    font-size: 0.85rem; cursor: pointer;
+  }
+  button.test:disabled { opacity: 0.6; cursor: default; }
+  .test-result { margin-top: 8px; font-size: 0.82rem; }
+  .test-result.ok { color: var(--ok); }
+  .test-result.err { color: var(--err); }
+  #groups-list { margin-top: 10px; }
+  #groups-list table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  #groups-list th {
+    text-align: left; color: var(--muted); font-weight: 500;
+    font-size: 0.75rem; padding: 6px 8px; border-bottom: 1px solid var(--border);
+  }
+  #groups-list th:first-child { width: 28px; }
+  #groups-list td {
+    padding: 7px 8px; border-bottom: 1px solid var(--border);
+    color: var(--text); vertical-align: middle;
+  }
+  #groups-list tr:last-child td { border-bottom: none; }
+  #groups-list .gid { color: var(--muted); font-size: 0.78rem; font-family: ui-monospace, Consolas, monospace; }
+  #groups-filter { margin-bottom: 10px; }
+  .groups-pager {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-top: 10px; font-size: 0.8rem; color: var(--muted);
+  }
+  .groups-pager button { margin-top: 0; }
+  .badge {
+    display: inline-block; font-size: 0.7rem; padding: 2px 8px;
+    border-radius: 999px; margin-left: 8px; vertical-align: middle;
+  }
+  .badge.set { background: rgba(62,207,142,.15); color: var(--ok); }
+  .badge.unset { background: rgba(255,92,92,.15); color: var(--err); }
+  button#save, button#save-filters {
+    width: 100%; padding: 13px; border-radius: 10px; border: none;
+    background: var(--accent); color: #111; font-weight: 600;
+    font-size: 0.95rem; cursor: pointer; margin-top: 14px;
+  }
+  button#save:disabled, button#save-filters:disabled { opacity: 0.6; cursor: default; }
+  #filters-msg { margin-top: 10px; font-size: 0.88rem; min-height: 1.2em; }
+  #filters-msg.ok { color: var(--ok); }
+  #filters-msg.err { color: var(--err); }
+
+  .power-card {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px;
+  }
+  .power-card .status { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+  .power-card .status b.on { color: var(--ok); }
+  .power-card .status b.off { color: var(--err); }
+  .switch { position: relative; width: 52px; height: 30px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .track {
+    position: absolute; inset: 0; background: #3a3f4a; border-radius: 999px;
+    cursor: pointer; transition: background .15s;
+  }
+  .switch .track::before {
+    content: ""; position: absolute; width: 24px; height: 24px; left: 3px; top: 3px;
+    background: #fff; border-radius: 50%; transition: transform .15s;
+  }
+  .switch input:checked + .track { background: var(--ok); }
+  .switch input:checked + .track::before { transform: translateX(22px); }
+  .switch input:disabled + .track { opacity: 0.6; cursor: default; }
+  #msg {
+    margin-top: 14px; font-size: 0.88rem; min-height: 1.2em;
+  }
+  #msg.ok { color: var(--ok); }
+  #msg.err { color: var(--err); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Configuração do Robo-Promo</h1>
+  <p class="sub">Credenciais por marketplace. Campos de senha/secret ficam em branco mesmo quando já configurados — preencha só se quiser trocar.</p>
+
+  <section class="card power-card">
+    <div>
+      <h2 style="margin-bottom:2px">Robô</h2>
+      <div class="status">Status: <b id="power-label">carregando...</b></div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="power-toggle" disabled>
+      <span class="track"></span>
+    </label>
+  </section>
+
+  <section class="card">
+    <h2>Filtros e Envio</h2>
+    <p class="hint">Regras aplicadas a todas as promoções (ML + Shopee) antes de enviar pro WhatsApp.</p>
+
+    <label>Desconto mínimo aplicável (%)</label>
+    <input data-filter="min_discount_percent" type="number" step="0.01" min="0" max="100">
+
+    <label>Economia mínima (R$)</label>
+    <input data-filter="min_savings_brl" type="number" step="0.01" min="0">
+
+    <label>Avaliação mínima do produto (0 = ignora)</label>
+    <input data-filter="min_rating" type="number" step="0.1" min="0" max="5">
+
+    <label><input type="checkbox" data-filter="require_coupon" style="width:auto;margin-right:8px;vertical-align:middle">Exigir cupom pra enviar</label>
+
+    <label>Quantidade de notificações por ciclo</label>
+    <input data-filter="max_promotions_per_cycle" type="number" step="1" min="1">
+
+    <label>Intervalo entre ciclos (segundos)</label>
+    <input data-filter="scraper_interval_seconds" type="number" step="1" min="30">
+
+    <label>Cooldown pra repostar o mesmo produto (horas)</label>
+    <input data-filter="repost_cooldown_hours" type="number" step="1" min="0">
+
+    <label>Queda de preço pra permitir repost antes do cooldown (%)</label>
+    <input data-filter="significant_price_drop_pct" type="number" step="0.01" min="0" max="100">
+
+    <button id="save-filters">Salvar filtros</button>
+    <div id="filters-msg"></div>
+  </section>
+
+  <section class="card">
+    <h2 style="justify-content:space-between">
+      <span><span class="dot ml"></span>Mercado Livre</span>
+      <label class="switch">
+        <input type="checkbox" class="source-toggle" data-source="mercadolivre" disabled>
+        <span class="track"></span>
+      </label>
+    </h2>
+    <p class="hint">Gere em <a href="https://developers.mercadolivre.com.br/" target="_blank" rel="noopener">developers.mercadolivre.com.br</a> (App ID/Secret) e <a href="https://afiliados.mercadolivre.com.br/" target="_blank" rel="noopener">afiliados.mercadolivre.com.br</a> (Affiliate ID).</p>
+
+    <label>App ID <span class="badge" data-badge="ml.app_id"></span></label>
+    <input data-field="ml.app_id" placeholder="ex: 1234567">
+
+    <label>Secret Key <span class="badge" data-badge="ml.secret_key"></span></label>
+    <input data-field="ml.secret_key" type="password" placeholder="deixe em branco para manter">
+
+    <label>Affiliate ID (publisher_id) <span class="badge" data-badge="ml.affiliate_id"></span></label>
+    <input data-field="ml.affiliate_id" placeholder="ex: 49527407">
+
+    <label>Affiliate Tag <span class="badge" data-badge="ml.affiliate_tag"></span></label>
+    <input data-field="ml.affiliate_tag" placeholder="ex: robopromo">
+  </section>
+
+  <section class="card">
+    <h2 style="justify-content:space-between">
+      <span><span class="dot shopee"></span>Shopee</span>
+      <label class="switch">
+        <input type="checkbox" class="source-toggle" data-source="shopee" disabled>
+        <span class="track"></span>
+      </label>
+    </h2>
+    <p class="hint">Cadastre-se em <a href="https://affiliate.shopee.com.br/open_api/home" target="_blank" rel="noopener">affiliate.shopee.com.br/open_api/home</a> para gerar App ID e Secret Key.</p>
+
+    <label>App ID <span class="badge" data-badge="shopee.app_id"></span></label>
+    <input data-field="shopee.app_id" placeholder="App ID da Shopee Affiliate API">
+
+    <label>Secret Key <span class="badge" data-badge="shopee.secret_key"></span></label>
+    <input data-field="shopee.secret_key" type="password" placeholder="deixe em branco para manter">
+  </section>
+
+  <section class="card">
+    <h2><span class="dot whatsapp"></span>WhatsApp (Evolution API)</h2>
+    <p class="hint">URL e instância do seu bridge Evolution/Baileys self-hosted.</p>
+
+    <label>API URL <span class="badge" data-badge="whatsapp.api_url"></span></label>
+    <input data-field="whatsapp.api_url" placeholder="http://localhost:8080">
+
+    <label>API Key <span class="badge" data-badge="whatsapp.api_key"></span></label>
+    <input data-field="whatsapp.api_key" type="password" placeholder="deixe em branco para manter">
+
+    <label>Instância <span class="badge" data-badge="whatsapp.instance"></span></label>
+    <input data-field="whatsapp.instance" placeholder="ex: robopromo">
+
+    <label>Canais destino (JSON) <span class="badge" data-badge="whatsapp.channels"></span></label>
+    <textarea data-field="whatsapp.channels" placeholder='[{"id":"120363XXXXXXXXXX@g.us","type":"group"}]'></textarea>
+
+    <button class="test" id="list-groups" type="button">Listar grupos conectados</button>
+    <div id="groups-list"></div>
+
+    <button class="test" id="test-whatsapp">Testar conexão</button>
+    <div class="test-result" id="test-whatsapp-result"></div>
+
+    <button class="test" id="send-test-msg" type="button">Enviar mensagem de teste pro(s) canal(is) salvos</button>
+    <div id="send-test-log"></div>
+  </section>
+
+  <button id="save">Salvar alterações</button>
+  <div id="msg"></div>
+</main>
+
+<script>
+async function loadPowerStatus() {
+  const toggle = document.getElementById('power-toggle');
+  const label = document.getElementById('power-label');
+  const res = await fetch('/api/bot-status');
+  const data = await res.json();
+  toggle.checked = data.enabled;
+  label.textContent = data.enabled ? 'ligado' : 'desligado';
+  label.className = data.enabled ? 'on' : 'off';
+  toggle.disabled = false;
+}
+
+async function togglePower() {
+  const toggle = document.getElementById('power-toggle');
+  const label = document.getElementById('power-label');
+  toggle.disabled = true;
+  try {
+    const res = await fetch('/api/bot-status', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: toggle.checked }),
+    });
+    const data = await res.json();
+    label.textContent = data.enabled ? 'ligado' : 'desligado';
+    label.className = data.enabled ? 'on' : 'off';
+  } catch (err) {
+    toggle.checked = !toggle.checked; // reverte em caso de erro
+  } finally {
+    toggle.disabled = false;
+  }
+}
+
+document.getElementById('power-toggle').addEventListener('change', togglePower);
+loadPowerStatus();
+
+async function loadSourcesStatus() {
+  const res = await fetch('/api/sources-status');
+  const data = await res.json();
+  document.querySelectorAll('.source-toggle').forEach((toggle) => {
+    const source = toggle.dataset.source;
+    if (source in data) toggle.checked = data[source];
+    toggle.disabled = false;
+  });
+}
+
+async function toggleSource(toggle) {
+  const source = toggle.dataset.source;
+  toggle.disabled = true;
+  try {
+    const res = await fetch(`/api/sources-status/${source}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: toggle.checked }),
+    });
+    if (!res.ok) throw new Error('falha ao salvar');
+  } catch (err) {
+    toggle.checked = !toggle.checked; // reverte em caso de erro
+  } finally {
+    toggle.disabled = false;
+  }
+}
+
+document.querySelectorAll('.source-toggle').forEach((toggle) => {
+  toggle.addEventListener('change', () => toggleSource(toggle));
+});
+loadSourcesStatus();
+
+async function loadSettings() {
+  const res = await fetch('/api/settings');
+  const data = await res.json();
+  for (const [appName, fields] of Object.entries(data)) {
+    for (const [key, value] of Object.entries(fields)) {
+      if (key.endsWith('_set')) {
+        const subkey = key.slice(0, -4);
+        const badge = document.querySelector(`[data-badge="${appName}.${subkey}"]`);
+        if (badge) {
+          badge.textContent = value ? 'configurado' : 'não configurado';
+          badge.className = 'badge ' + (value ? 'set' : 'unset');
+        }
+        continue;
+      }
+      const input = document.querySelector(`[data-field="${appName}.${key}"]`);
+      if (!input || !value) continue;
+      input.value = value;
+      // Secret mascarado: guarda o valor pra saveSettings saber que não foi digitado de novo.
+      if (input.type === 'password') input.dataset.masked = value;
+    }
+  }
+}
+
+async function saveSettings() {
+  const btn = document.getElementById('save');
+  const msg = document.getElementById('msg');
+  const body = {};
+  document.querySelectorAll('[data-field]').forEach((input) => {
+    const [appName, key] = input.dataset.field.split('.');
+    const value = input.value.trim();
+    if (!value) return;
+    if (input.type === 'password' && value === input.dataset.masked) return; // não editado, não reenvia
+    body[appName] = body[appName] || {};
+    body[appName][key] = value;
+  });
+
+  btn.disabled = true;
+  msg.textContent = 'Salvando...';
+  msg.className = '';
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Falha ao salvar');
+    msg.textContent = data.updated.length
+      ? `Salvo: ${data.updated.join(', ')}`
+      : 'Nada para salvar.';
+    msg.className = 'ok';
+    document.querySelectorAll('input[type="password"]').forEach((i) => (i.value = ''));
+    await loadSettings();
+  } catch (err) {
+    msg.textContent = 'Erro: ' + err.message;
+    msg.className = 'err';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+const GROUPS_PAGE_SIZE = 10;
+let allGroups = [];
+let groupsFilter = '';
+let groupsPage = 1;
+const selectedGroupIds = new Set();
+
+async function loadFilters() {
+  const res = await fetch('/api/filters');
+  const data = await res.json();
+  for (const [key, value] of Object.entries(data)) {
+    const input = document.querySelector(`[data-filter="${key}"]`);
+    if (!input) continue;
+    if (input.type === 'checkbox') input.checked = Boolean(value);
+    else input.value = value;
+  }
+}
+
+async function saveFilters() {
+  const btn = document.getElementById('save-filters');
+  const msg = document.getElementById('filters-msg');
+  const body = {};
+  document.querySelectorAll('[data-filter]').forEach((input) => {
+    body[input.dataset.filter] = input.type === 'checkbox' ? input.checked : input.value;
+  });
+
+  btn.disabled = true;
+  msg.textContent = 'Salvando...';
+  msg.className = '';
+  try {
+    const res = await fetch('/api/filters', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Falha ao salvar');
+    msg.textContent = data.updated.length ? `Salvo: ${data.updated.join(', ')}` : 'Nada para salvar.';
+    msg.className = 'ok';
+    await loadFilters();
+  } catch (err) {
+    msg.textContent = 'Erro: ' + err.message;
+    msg.className = 'err';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('save-filters').addEventListener('click', saveFilters);
+loadFilters();
+
+async function listGroups() {
+  const btn = document.getElementById('list-groups');
+  const container = document.getElementById('groups-list');
+  btn.disabled = true;
+  container.innerHTML = 'Buscando grupos...';
+  try {
+    const res = await fetch('/api/whatsapp/groups');
+    const data = await res.json();
+    allGroups = data.groups || [];
+    if (!allGroups.length) {
+      container.innerHTML = '<span class="test-result err">Nenhum grupo encontrado — confira se o bridge está conectado.</span>';
+      return;
+    }
+    groupsFilter = '';
+    groupsPage = 1;
+    renderGroupsList();
+  } catch (err) {
+    container.innerHTML = '<span class="test-result err">Erro: ' + err.message + '</span>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderGroupsList() {
+  const container = document.getElementById('groups-list');
+  const term = groupsFilter.trim().toLowerCase();
+  const filtered = term
+    ? allGroups.filter((g) => (g.subject || '').toLowerCase().includes(term) || g.id.includes(term))
+    : allGroups;
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / GROUPS_PAGE_SIZE));
+  groupsPage = Math.min(groupsPage, totalPages);
+  const start = (groupsPage - 1) * GROUPS_PAGE_SIZE;
+  const pageItems = filtered.slice(start, start + GROUPS_PAGE_SIZE);
+
+  const rows = pageItems.length
+    ? pageItems.map((g) => `
+        <tr>
+          <td><input type="checkbox" value="${g.id}" ${selectedGroupIds.has(g.id) ? 'checked' : ''}></td>
+          <td>${g.subject || g.id}</td>
+          <td class="gid">${g.id}</td>
+        </tr>`).join('')
+    : '<tr><td colspan="3" style="color:var(--muted)">Nenhum grupo bate com a busca.</td></tr>';
+
+  container.innerHTML = `
+    <input type="text" id="groups-filter" placeholder="Filtrar por nome ou ID..." value="${groupsFilter}">
+    <table>
+      <thead><tr><th></th><th>Grupo</th><th>ID</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="groups-pager">
+      <button type="button" class="test" id="groups-prev" ${groupsPage <= 1 ? 'disabled' : ''}>Anterior</button>
+      <span>Página ${groupsPage} de ${totalPages} (${filtered.length} grupo${filtered.length === 1 ? '' : 's'})</span>
+      <button type="button" class="test" id="groups-next" ${groupsPage >= totalPages ? 'disabled' : ''}>Próxima</button>
+    </div>
+    <button type="button" class="test" id="groups-add">Substituir canais pelos selecionados (${selectedGroupIds.size})</button>
+  `;
+
+  container.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+    cb.addEventListener('change', () => {
+      if (cb.checked) selectedGroupIds.add(cb.value);
+      else selectedGroupIds.delete(cb.value);
+      document.getElementById('groups-add').textContent =
+        `Substituir canais pelos selecionados (${selectedGroupIds.size})`;
+    });
+  });
+
+  const filterInput = document.getElementById('groups-filter');
+  filterInput.addEventListener('input', () => {
+    groupsFilter = filterInput.value;
+    groupsPage = 1;
+    renderGroupsList();
+    document.getElementById('groups-filter').focus();
+    const v = document.getElementById('groups-filter').value;
+    document.getElementById('groups-filter').setSelectionRange(v.length, v.length);
+  });
+  document.getElementById('groups-prev').addEventListener('click', () => {
+    groupsPage -= 1;
+    renderGroupsList();
+  });
+  document.getElementById('groups-next').addEventListener('click', () => {
+    groupsPage += 1;
+    renderGroupsList();
+  });
+  document.getElementById('groups-add').addEventListener('click', addSelectedGroups);
+}
+
+function addSelectedGroups() {
+  const textarea = document.querySelector('[data-field="whatsapp.channels"]');
+  const replaced = Array.from(selectedGroupIds).map((id) => ({ id, type: 'group' }));
+  textarea.value = JSON.stringify(replaced);
+}
+
+async function testWhatsapp() {
+  const btn = document.getElementById('test-whatsapp');
+  const result = document.getElementById('test-whatsapp-result');
+  btn.disabled = true;
+  result.textContent = 'Testando...';
+  result.className = 'test-result';
+  try {
+    const res = await fetch('/api/whatsapp/test', { method: 'POST' });
+    const data = await res.json();
+    result.textContent = data.connected ? 'Conectado.' : 'Não conectado — confira URL/API Key/instância.';
+    result.className = 'test-result ' + (data.connected ? 'ok' : 'err');
+  } catch (err) {
+    result.textContent = 'Erro: ' + err.message;
+    result.className = 'test-result err';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function sendTestMessage() {
+  const btn = document.getElementById('send-test-msg');
+  const log = document.getElementById('send-test-log');
+  btn.disabled = true;
+  log.innerHTML = '<div class="test-result">Enviando...</div>';
+  try {
+    const res = await fetch('/api/whatsapp/send-test', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Falha ao enviar');
+    log.innerHTML = data.results.map((r) => `
+      <div class="test-result ${r.sent ? 'ok' : 'err'}">${r.sent ? '✓ enviado' : '✗ falhou'} — ${r.channel_id}</div>
+    `).join('');
+  } catch (err) {
+    log.innerHTML = `<div class="test-result err">Erro: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('list-groups').addEventListener('click', listGroups);
+document.getElementById('test-whatsapp').addEventListener('click', testWhatsapp);
+document.getElementById('send-test-msg').addEventListener('click', sendTestMessage);
+document.querySelectorAll('input[type="password"][data-field]').forEach((input) => {
+  input.addEventListener('focus', () => {
+    if (input.value === input.dataset.masked) input.value = '';
+  });
+  input.addEventListener('blur', () => {
+    if (!input.value && input.dataset.masked) input.value = input.dataset.masked;
+  });
+});
+
+document.getElementById('save').addEventListener('click', saveSettings);
+loadSettings();
+</script>
+</body>
+</html>
