@@ -78,6 +78,33 @@
     gap: 10px; margin-top: 10px; font-size: 0.8rem; color: var(--muted);
   }
   .groups-pager button { margin-top: 0; }
+  h3.step { font-size: 0.92rem; margin: 22px 0 8px; display: flex; align-items: center; }
+  .wa-status { font-size: 0.9rem; color: var(--muted); }
+  .wa-status.ok { color: var(--ok); }
+  .wa-status.err { color: var(--err); }
+  #wa-qr { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  #wa-qr[hidden] { display: none; }
+  #wa-qr-img { width: 220px; height: 220px; background: #fff; border-radius: 10px; padding: 8px; }
+  .wa-steps { margin: 0; padding-left: 20px; font-size: 0.85rem; color: var(--muted); flex: 1; min-width: 200px; }
+  .wa-steps li { margin-bottom: 6px; }
+  .wa-steps b { color: var(--text); }
+  details.advanced { margin-top: 24px; border-top: 1px solid var(--border); padding-top: 14px; }
+  details.advanced summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+  details.advanced summary + p.hint { margin-top: 10px; }
+  .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .page-head button { margin-top: 0; }
+  #login {
+    position: fixed; inset: 0; z-index: 10; background: var(--bg);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  #login[hidden] { display: none; }
+  #login form { width: 100%; max-width: 400px; margin: 0; }
+  #login-submit {
+    width: 100%; padding: 12px; border-radius: 10px; border: none; margin-top: 18px;
+    background: var(--accent); color: #111; font-weight: 600; font-size: 0.95rem; cursor: pointer;
+  }
+  #login-submit:disabled { opacity: 0.6; cursor: default; }
+  #login-msg { margin-top: 12px; font-size: 0.85rem; color: var(--err); min-height: 1.2em; }
   .badge {
     display: inline-block; font-size: 0.7rem; padding: 2px 8px;
     border-radius: 999px; margin-left: 8px; vertical-align: middle;
@@ -122,8 +149,26 @@
 </style>
 </head>
 <body>
+<div id="login" hidden>
+  <form id="login-form" class="card">
+    <h2>Entrar no Robo-Promo</h2>
+    <p class="hint">Use o endereço, o usuário e a senha mostrados no fim da instalação do robô.</p>
+    <label for="login-base">Endereço do robô</label>
+    <input id="login-base" name="base" required placeholder="https://meu-mac.xxxx.ts.net" autocomplete="url">
+    <label for="login-user">Usuário</label>
+    <input id="login-user" name="user" required value="admin" autocomplete="username">
+    <label for="login-password">Senha</label>
+    <input id="login-password" name="password" type="password" required autocomplete="current-password">
+    <button type="submit" id="login-submit">Entrar</button>
+    <div id="login-msg" role="alert"></div>
+  </form>
+</div>
+
 <main>
-  <h1>Configuração do Robo-Promo</h1>
+  <div class="page-head">
+    <h1>Configuração do Robo-Promo</h1>
+    <button type="button" class="test" id="logout" hidden>Sair</button>
+  </div>
   <p class="sub">Credenciais por marketplace. Campos de senha/secret ficam em branco mesmo quando já configurados — preencha só se quiser trocar.</p>
 
   <section class="card power-card">
@@ -209,29 +254,52 @@
   </section>
 
   <section class="card">
-    <h2><span class="dot whatsapp"></span>WhatsApp (Evolution API)</h2>
-    <p class="hint">URL e instância do seu bridge Evolution/Baileys self-hosted.</p>
+    <h2><span class="dot whatsapp"></span>WhatsApp</h2>
+    <p class="hint">Conecte o número que vai enviar as promoções e escolha os grupos de destino.</p>
 
-    <label>API URL <span class="badge" data-badge="whatsapp.api_url"></span></label>
-    <input data-field="whatsapp.api_url" placeholder="http://localhost:8080">
+    <h3 class="step">1. Conectar número</h3>
+    <div id="wa-connect">
+      <div class="wa-status" id="wa-status">Verificando conexão...</div>
+      <div id="wa-qr" hidden>
+        <img id="wa-qr-img" alt="QR Code para conectar o WhatsApp">
+        <ol class="wa-steps">
+          <li>Abra o WhatsApp no celular.</li>
+          <li>Toque em <b>Mais opções</b> (⋮) ou <b>Configurações</b> e depois em <b>Aparelhos conectados</b>.</li>
+          <li>Toque em <b>Conectar um aparelho</b> e aponte a câmera para este QR Code.</li>
+        </ol>
+      </div>
+      <button class="test" id="wa-logout" type="button" hidden>Desconectar / trocar número</button>
+    </div>
 
-    <label>API Key <span class="badge" data-badge="whatsapp.api_key"></span></label>
-    <input data-field="whatsapp.api_key" type="password" placeholder="deixe em branco para manter">
-
-    <label>Instância <span class="badge" data-badge="whatsapp.instance"></span></label>
-    <input data-field="whatsapp.instance" placeholder="ex: robopromo">
-
-    <label>Canais destino (JSON) <span class="badge" data-badge="whatsapp.channels"></span></label>
-    <textarea data-field="whatsapp.channels" placeholder='[{"id":"120363XXXXXXXXXX@g.us","type":"group"}]'></textarea>
-
-    <button class="test" id="list-groups" type="button">Listar grupos conectados</button>
+    <h3 class="step">2. Grupos de destino <span class="badge" data-badge="whatsapp.channels"></span></h3>
+    <p class="hint">O número conectado precisa participar dos grupos. Marque os grupos e clique em salvar.</p>
+    <button class="test" id="list-groups" type="button">Escolher grupos</button>
     <div id="groups-list"></div>
+    <div class="test-result" id="groups-save-result"></div>
 
-    <button class="test" id="test-whatsapp">Testar conexão</button>
-    <div class="test-result" id="test-whatsapp-result"></div>
-
-    <button class="test" id="send-test-msg" type="button">Enviar mensagem de teste pro(s) canal(is) salvos</button>
+    <h3 class="step">3. Testar</h3>
+    <button class="test" id="send-test-msg" type="button">Enviar mensagem de teste para os grupos salvos</button>
     <div id="send-test-log"></div>
+
+    <details class="advanced">
+      <summary>Avançado (conexão com a bridge)</summary>
+      <p class="hint">Só altere se a bridge do WhatsApp roda em outro servidor. Depois clique em "Salvar alterações".</p>
+
+      <label>API URL <span class="badge" data-badge="whatsapp.api_url"></span></label>
+      <input data-field="whatsapp.api_url" placeholder="http://localhost:8080">
+
+      <label>API Key <span class="badge" data-badge="whatsapp.api_key"></span></label>
+      <input data-field="whatsapp.api_key" type="password" placeholder="deixe em branco para manter">
+
+      <label>Instância <span class="badge" data-badge="whatsapp.instance"></span></label>
+      <input data-field="whatsapp.instance" placeholder="ex: robopromo">
+
+      <label>Canais destino (JSON)</label>
+      <textarea data-field="whatsapp.channels" placeholder='[{"id":"120363XXXXXXXXXX@g.us","type":"group"}]'></textarea>
+
+      <button class="test" id="test-whatsapp">Testar conexão</button>
+      <div class="test-result" id="test-whatsapp-result"></div>
+    </details>
   </section>
 
   <button id="save">Salvar alterações</button>
@@ -239,10 +307,97 @@
 </main>
 
 <script>
+// --- Conexão com o robô ---
+// Servida pelo próprio robô (/admin): mesma origem, o navegador cuida do login.
+// Hospedada fora (ex.: Vercel): pede endereço do robô + usuário/senha e envia em cada chamada.
+const REMOTE = !location.pathname.startsWith('/admin');
+const AUTH_KEY = 'robopromo-auth';
+const FLASH_KEY = 'robopromo-login-msg';
+let auth = null;
+let resolveReady;
+const ready = new Promise((resolve) => { resolveReady = resolve; });
+
+function storageGet(store, key) {
+  try { return store.getItem(key); } catch (_) { return null; }
+}
+function storageSet(store, key, value) {
+  try { value === null ? store.removeItem(key) : store.setItem(key, value); } catch (_) { /* sem storage */ }
+}
+
+async function api(path, opts = {}) {
+  if (!REMOTE) return fetch(path, opts);
+  await ready;
+  const res = await fetch(auth.base + path, {
+    ...opts,
+    headers: { ...(opts.headers || {}), Authorization: auth.header },
+  });
+  if (res.status === 401) {
+    logout('Sessão expirada ou senha alterada. Entre de novo.');
+    throw new Error('Login necessário');
+  }
+  return res;
+}
+
+function logout(message) {
+  storageSet(localStorage, AUTH_KEY, null);
+  if (message) storageSet(sessionStorage, FLASH_KEY, message);
+  location.reload();
+}
+
+function normalizeBase(raw) {
+  let base = raw.trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(base)) base = 'https://' + base;
+  return base;
+}
+
+async function submitLogin(event) {
+  event.preventDefault();
+  const form = event.target;
+  const msg = document.getElementById('login-msg');
+  const btn = form.querySelector('button');
+  const base = normalizeBase(form.base.value);
+  const header = 'Basic ' + btoa(unescape(encodeURIComponent(`${form.user.value}:${form.password.value}`)));
+  btn.disabled = true;
+  msg.textContent = 'Conectando...';
+  try {
+    const res = await fetch(base + '/api/bot-status', { headers: { Authorization: header } });
+    if (res.status === 401) throw new Error('Usuário ou senha incorretos.');
+    if (!res.ok) throw new Error(`O robô respondeu com erro (HTTP ${res.status}).`);
+    auth = { base, header };
+    storageSet(localStorage, AUTH_KEY, JSON.stringify(auth));
+    document.getElementById('login').hidden = true;
+    document.getElementById('logout').hidden = false;
+    resolveReady();
+  } catch (err) {
+    msg.textContent = err.message === 'Failed to fetch'
+      ? 'Não foi possível falar com o robô. Confira o endereço e se o computador dele está ligado.'
+      : err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+if (REMOTE) {
+  document.getElementById('login-form').addEventListener('submit', submitLogin);
+  document.getElementById('logout').addEventListener('click', () => logout());
+  try { auth = JSON.parse(storageGet(localStorage, AUTH_KEY)); } catch (_) { auth = null; }
+  if (auth && auth.base && auth.header) {
+    document.getElementById('logout').hidden = false;
+    resolveReady();
+  } else {
+    auth = null;
+    document.getElementById('login').hidden = false;
+    document.getElementById('login-msg').textContent = storageGet(sessionStorage, FLASH_KEY) || '';
+    storageSet(sessionStorage, FLASH_KEY, null);
+  }
+} else {
+  resolveReady();
+}
+
 async function loadPowerStatus() {
   const toggle = document.getElementById('power-toggle');
   const label = document.getElementById('power-label');
-  const res = await fetch('/api/bot-status');
+  const res = await api('/api/bot-status');
   const data = await res.json();
   toggle.checked = data.enabled;
   label.textContent = data.enabled ? 'ligado' : 'desligado';
@@ -255,7 +410,7 @@ async function togglePower() {
   const label = document.getElementById('power-label');
   toggle.disabled = true;
   try {
-    const res = await fetch('/api/bot-status', {
+    const res = await api('/api/bot-status', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: toggle.checked }),
@@ -274,7 +429,7 @@ document.getElementById('power-toggle').addEventListener('change', togglePower);
 loadPowerStatus();
 
 async function loadSourcesStatus() {
-  const res = await fetch('/api/sources-status');
+  const res = await api('/api/sources-status');
   const data = await res.json();
   document.querySelectorAll('.source-toggle').forEach((toggle) => {
     const source = toggle.dataset.source;
@@ -287,7 +442,7 @@ async function toggleSource(toggle) {
   const source = toggle.dataset.source;
   toggle.disabled = true;
   try {
-    const res = await fetch(`/api/sources-status/${source}`, {
+    const res = await api(`/api/sources-status/${source}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: toggle.checked }),
@@ -306,7 +461,7 @@ document.querySelectorAll('.source-toggle').forEach((toggle) => {
 loadSourcesStatus();
 
 async function loadSettings() {
-  const res = await fetch('/api/settings');
+  const res = await api('/api/settings');
   const data = await res.json();
   for (const [appName, fields] of Object.entries(data)) {
     for (const [key, value] of Object.entries(fields)) {
@@ -345,7 +500,7 @@ async function saveSettings() {
   msg.textContent = 'Salvando...';
   msg.className = '';
   try {
-    const res = await fetch('/api/settings', {
+    const res = await api('/api/settings', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -373,7 +528,7 @@ let groupsPage = 1;
 const selectedGroupIds = new Set();
 
 async function loadFilters() {
-  const res = await fetch('/api/filters');
+  const res = await api('/api/filters');
   const data = await res.json();
   for (const [key, value] of Object.entries(data)) {
     const input = document.querySelector(`[data-filter="${key}"]`);
@@ -395,7 +550,7 @@ async function saveFilters() {
   msg.textContent = 'Salvando...';
   msg.className = '';
   try {
-    const res = await fetch('/api/filters', {
+    const res = await api('/api/filters', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -416,19 +571,92 @@ async function saveFilters() {
 document.getElementById('save-filters').addEventListener('click', saveFilters);
 loadFilters();
 
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+function savedChannelIds() {
+  try {
+    const parsed = JSON.parse(document.querySelector('[data-field="whatsapp.channels"]').value || '[]');
+    return Array.isArray(parsed) ? parsed.map((c) => c.id).filter(Boolean) : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+// --- Conexão do WhatsApp (QR Code) ---
+let waTimer = null;
+
+async function pollWhatsapp() {
+  clearTimeout(waTimer);
+  const statusEl = document.getElementById('wa-status');
+  const qrBox = document.getElementById('wa-qr');
+  const logoutBtn = document.getElementById('wa-logout');
+  let next = 3000;
+  try {
+    const res = await api('/api/whatsapp/status');
+    const data = await res.json();
+    qrBox.hidden = data.status !== 'qr';
+    logoutBtn.hidden = data.status !== 'connected';
+    if (data.status === 'connected') {
+      statusEl.textContent = '✓ WhatsApp conectado.';
+      statusEl.className = 'wa-status ok';
+      next = 10000;
+    } else if (data.status === 'qr') {
+      statusEl.textContent = 'Escaneie o QR Code abaixo com o celular. Ele se renova sozinho.';
+      statusEl.className = 'wa-status';
+      document.getElementById('wa-qr-img').src = data.qr;
+    } else if (data.status === 'starting') {
+      statusEl.textContent = 'Iniciando conexão com o WhatsApp...';
+      statusEl.className = 'wa-status';
+    } else {
+      statusEl.textContent = data.error || 'WhatsApp indisponível.';
+      statusEl.className = 'wa-status err';
+      next = 10000;
+    }
+  } catch (err) {
+    statusEl.textContent = 'Painel sem resposta: ' + err.message;
+    statusEl.className = 'wa-status err';
+    next = 10000;
+  }
+  waTimer = setTimeout(pollWhatsapp, next);
+}
+
+async function logoutWhatsapp() {
+  if (!confirm('Desconectar este número? O robô para de enviar até você conectar outro.')) return;
+  const btn = document.getElementById('wa-logout');
+  btn.disabled = true;
+  try {
+    const res = await api('/api/whatsapp/logout', { method: 'POST' });
+    if (!res.ok) throw new Error((await res.json()).detail || 'Falha ao desconectar');
+  } catch (err) {
+    alert('Erro: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    pollWhatsapp();
+  }
+}
+
+document.getElementById('wa-logout').addEventListener('click', logoutWhatsapp);
+pollWhatsapp();
+
 async function listGroups() {
   const btn = document.getElementById('list-groups');
   const container = document.getElementById('groups-list');
   btn.disabled = true;
   container.innerHTML = 'Buscando grupos...';
   try {
-    const res = await fetch('/api/whatsapp/groups');
+    const res = await api('/api/whatsapp/groups');
     const data = await res.json();
     allGroups = data.groups || [];
     if (!allGroups.length) {
-      container.innerHTML = '<span class="test-result err">Nenhum grupo encontrado — confira se o bridge está conectado.</span>';
+      container.innerHTML = '<span class="test-result err">Nenhum grupo encontrado — conecte o WhatsApp (passo 1) e confira se o número participa de algum grupo.</span>';
       return;
     }
+    selectedGroupIds.clear();
+    savedChannelIds().forEach((id) => selectedGroupIds.add(id));
     groupsFilter = '';
     groupsPage = 1;
     renderGroupsList();
@@ -454,14 +682,14 @@ function renderGroupsList() {
   const rows = pageItems.length
     ? pageItems.map((g) => `
         <tr>
-          <td><input type="checkbox" value="${g.id}" ${selectedGroupIds.has(g.id) ? 'checked' : ''}></td>
-          <td>${g.subject || g.id}</td>
-          <td class="gid">${g.id}</td>
+          <td><input type="checkbox" value="${escapeHtml(g.id)}" ${selectedGroupIds.has(g.id) ? 'checked' : ''}></td>
+          <td>${escapeHtml(g.subject || g.id)}</td>
+          <td class="gid">${escapeHtml(g.id)}</td>
         </tr>`).join('')
     : '<tr><td colspan="3" style="color:var(--muted)">Nenhum grupo bate com a busca.</td></tr>';
 
   container.innerHTML = `
-    <input type="text" id="groups-filter" placeholder="Filtrar por nome ou ID..." value="${groupsFilter}">
+    <input type="text" id="groups-filter" placeholder="Filtrar por nome ou ID..." value="${escapeHtml(groupsFilter)}">
     <table>
       <thead><tr><th></th><th>Grupo</th><th>ID</th></tr></thead>
       <tbody>${rows}</tbody>
@@ -471,15 +699,16 @@ function renderGroupsList() {
       <span>Página ${groupsPage} de ${totalPages} (${filtered.length} grupo${filtered.length === 1 ? '' : 's'})</span>
       <button type="button" class="test" id="groups-next" ${groupsPage >= totalPages ? 'disabled' : ''}>Próxima</button>
     </div>
-    <button type="button" class="test" id="groups-add">Substituir canais pelos selecionados (${selectedGroupIds.size})</button>
+    <button type="button" class="test" id="groups-add" ${selectedGroupIds.size ? '' : 'disabled'}>Salvar grupos selecionados (${selectedGroupIds.size})</button>
   `;
 
   container.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
     cb.addEventListener('change', () => {
       if (cb.checked) selectedGroupIds.add(cb.value);
       else selectedGroupIds.delete(cb.value);
-      document.getElementById('groups-add').textContent =
-        `Substituir canais pelos selecionados (${selectedGroupIds.size})`;
+      const addBtn = document.getElementById('groups-add');
+      addBtn.textContent = `Salvar grupos selecionados (${selectedGroupIds.size})`;
+      addBtn.disabled = !selectedGroupIds.size;
     });
   });
 
@@ -503,10 +732,31 @@ function renderGroupsList() {
   document.getElementById('groups-add').addEventListener('click', addSelectedGroups);
 }
 
-function addSelectedGroups() {
-  const textarea = document.querySelector('[data-field="whatsapp.channels"]');
-  const replaced = Array.from(selectedGroupIds).map((id) => ({ id, type: 'group' }));
-  textarea.value = JSON.stringify(replaced);
+async function addSelectedGroups() {
+  const btn = document.getElementById('groups-add');
+  const result = document.getElementById('groups-save-result');
+  const channels = JSON.stringify(Array.from(selectedGroupIds).map((id) => ({ id, type: 'group' })));
+  btn.disabled = true;
+  result.textContent = 'Salvando...';
+  result.className = 'test-result';
+  try {
+    const res = await api('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ whatsapp: { channels } }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Falha ao salvar');
+    document.querySelector('[data-field="whatsapp.channels"]').value = channels;
+    result.textContent = `✓ ${selectedGroupIds.size} grupo(s) salvo(s) como destino.`;
+    result.className = 'test-result ok';
+    await loadSettings();
+  } catch (err) {
+    result.textContent = 'Erro: ' + err.message;
+    result.className = 'test-result err';
+  } finally {
+    btn.disabled = !selectedGroupIds.size;
+  }
 }
 
 async function testWhatsapp() {
@@ -516,7 +766,7 @@ async function testWhatsapp() {
   result.textContent = 'Testando...';
   result.className = 'test-result';
   try {
-    const res = await fetch('/api/whatsapp/test', { method: 'POST' });
+    const res = await api('/api/whatsapp/test', { method: 'POST' });
     const data = await res.json();
     result.textContent = data.connected ? 'Conectado.' : 'Não conectado — confira URL/API Key/instância.';
     result.className = 'test-result ' + (data.connected ? 'ok' : 'err');
@@ -534,7 +784,7 @@ async function sendTestMessage() {
   btn.disabled = true;
   log.innerHTML = '<div class="test-result">Enviando...</div>';
   try {
-    const res = await fetch('/api/whatsapp/send-test', { method: 'POST' });
+    const res = await api('/api/whatsapp/send-test', { method: 'POST' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Falha ao enviar');
     log.innerHTML = data.results.map((r) => `

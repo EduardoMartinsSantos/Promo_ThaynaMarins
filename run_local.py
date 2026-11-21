@@ -9,7 +9,7 @@ Uso:
 """
 import asyncio
 import sys
-from app.core.config import settings
+from app.core.config import settings, reload_settings
 from app.core.logger import get_logger
 from app.scheduler.worker import run_cycle
 
@@ -30,6 +30,8 @@ async def main():
     )
     while True:
         try:
+            # Aplica grupos/filtros/credenciais salvos pelo painel desde o último ciclo.
+            reload_settings()
             await run_cycle(dry_run=dry_run)
         except Exception:
             logger.exception("Erro no ciclo — continuando no próximo intervalo")

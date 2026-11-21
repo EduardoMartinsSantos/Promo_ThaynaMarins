@@ -3,6 +3,7 @@
 whatsapp-bridge/.env
 whatsapp-bridge/auth_info/
 whatsapp-bridge/qr.png
+whatsapp-bridge/bridge.log
 robopromo.db
 robopromo.tar.gz
 

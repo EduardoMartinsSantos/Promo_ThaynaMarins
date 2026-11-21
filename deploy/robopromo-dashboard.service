@@ -1,0 +1,18 @@
+[Unit]
+Description=Robo-Promo - Painel (FastAPI, atras do Caddy)
+After=network-online.target robopromo-bridge.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=robopromo
+WorkingDirectory=/opt/robopromo
+# A bridge é o serviço robopromo-bridge; o painel não deve abrir outra cópia.
+Environment=BRIDGE_AUTOSTART=false
+# So escuta localmente; o Caddy publica em HTTPS na porta 443.
+ExecStart=/opt/robopromo/.venv/bin/uvicorn app.dashboard.main:app --host 127.0.0.1 --port 8000 --proxy-headers
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

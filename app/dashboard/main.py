@@ -2,11 +2,16 @@
 Painel administrativo — FastAPI + endpoints REST.
 Sirva o frontend React em /static ou use como API pura.
 """
+import base64
 import json
+import secrets
+from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlparse
 
-from fastapi import FastAPI, Depends, Query, HTTPException
+from fastapi import FastAPI, Depends, Query, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, desc
@@ -17,20 +22,94 @@ from app.database.models import Product, Promotion, SentMessage, Click, Configur
 from app.core.config import settings
 from app.core.env_writer import update_env_file
 from app.core.bot_state import is_bot_enabled, set_bot_enabled, is_source_enabled, set_source_enabled
+from app.whatsapp import bridge_process
 
 SOURCES = ("mercadolivre", "shopee")
 
-app = FastAPI(title="Robo-Promo Dashboard", version="1.0.0")
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Sobe a bridge do WhatsApp junto com o painel (se local e ainda não estiver rodando).
+    from app.whatsapp.evolution_client import EvolutionAPIClient
+
+    if (settings.BRIDGE_AUTOSTART and bridge_process.is_local()
+            and not (await EvolutionAPIClient().get_qr())["reachable"]):
+        error = bridge_process.start()
+        if error:
+            from app.core.logger import get_logger
+            get_logger("dashboard").warning(f"[WA] Bridge não iniciada: {error}")
+    yield
+    bridge_process.stop()
+
+
+app = FastAPI(title="Robo-Promo Dashboard", version="1.0.0", lifespan=lifespan)
+
+PUBLIC_PATHS = {"/health"}
+# Front hospedado fora do robô (ex.: Vercel): manda o login no header Authorization.
+ALLOWED_ORIGINS = {
+    o.strip().rstrip("/") for o in settings.DASHBOARD_ALLOWED_ORIGINS.split(",") if o.strip()
+}
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    """
+    Login HTTP Basic (o navegador mostra a janela de usuário/senha) quando
+    DASHBOARD_PASSWORD está definido. Também recusa escrita vinda de outro site
+    (CSRF): o navegador reenviaria a senha salva em um POST forjado.
+    """
+    origin = request.headers.get("origin")
+    trusted_origin = origin in ALLOWED_ORIGINS
+    if request.method not in ("GET", "HEAD", "OPTIONS") and not trusted_origin:
+        # Sec-Fetch-Site vem do próprio navegador e não depende do Host reescrito
+        # por proxy (Caddy/Tailscale). Sem ele (navegador antigo), compara Origin.
+        fetch_site = request.headers.get("sec-fetch-site")
+        hosts = {request.headers.get("host"), request.headers.get("x-forwarded-host")}
+        if fetch_site:
+            blocked = fetch_site not in ("same-origin", "none")
+        else:
+            blocked = bool(origin) and urlparse(origin).netloc not in hosts
+        if blocked:
+            return JSONResponse({"detail": "Origem não permitida"}, status_code=403)
+
+    password = settings.DASHBOARD_PASSWORD
+    if not password or request.url.path in PUBLIC_PATHS:
+        return await call_next(request)
+
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("basic "):
+        try:
+            user, _, given = base64.b64decode(auth[6:]).decode("utf-8").partition(":")
+        except (ValueError, UnicodeDecodeError):
+            user, given = "", ""
+        user_ok = secrets.compare_digest(user.encode(), settings.DASHBOARD_USER.encode())
+        pass_ok = secrets.compare_digest(given.encode(), password.encode())
+        if user_ok and pass_ok:
+            return await call_next(request)
+
+    # Sem WWW-Authenticate para o front externo: ele tem tela de login própria
+    # e o navegador não deve abrir a janela nativa de senha.
+    headers = {} if trusted_origin else {"WWW-Authenticate": 'Basic realm="Robo-Promo", charset="UTF-8"'}
+    return Response("Login necessário", status_code=401, headers=headers)
+
+
+# Registrado depois do login => fica por fora: responde o preflight (OPTIONS)
+# e põe os headers CORS inclusive nas respostas 401.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=sorted(ALLOWED_ORIGINS),
+    allow_methods=["GET", "POST", "PUT"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 app.mount("/admin", StaticFiles(directory=STATIC_DIR, html=True), name="admin")
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse("/admin/")
 
 # Campos editáveis pela tela de configuração, por app — adicione novos aqui.
 SETTINGS_FIELDS: dict[str, dict[str, str]] = {
@@ -247,7 +326,47 @@ async def update_settings(body: dict):
     if updates:
         update_env_file(updates)
 
+    # Bridge iniciada pelo painel usa porta/API key antigas — encerra; o próximo
+    # GET /api/whatsapp/status sobe de novo com os valores novos.
+    if {"EVOLUTION_API_URL", "EVOLUTION_API_KEY"} & updates.keys():
+        bridge_process.stop()
+
     return {"ok": True, "updated": list(updates.keys())}
+
+
+@app.get("/api/whatsapp/status")
+async def whatsapp_status():
+    """
+    Estado do pareamento para a tela "Conectar WhatsApp" (o front consulta a cada poucos segundos).
+    status: connected | qr | starting | offline | error. Se a bridge local estiver fora, tenta subir.
+    """
+    from app.whatsapp.evolution_client import EvolutionAPIClient
+
+    info = await EvolutionAPIClient().get_qr()
+    if not info["reachable"]:
+        if bridge_process.is_starting():
+            return {"status": "starting"}
+        error = bridge_process.start()
+        if error:
+            return {"status": "offline", "error": error}
+        return {"status": "starting"}
+    if not info["auth_ok"]:
+        return {"status": "error", "error": "A API Key do painel não confere com a da bridge (veja Avançado)."}
+    if info["state"] == "open":
+        return {"status": "connected"}
+    if info["qr"]:
+        return {"status": "qr", "qr": info["qr"]}
+    return {"status": "starting"}
+
+
+@app.post("/api/whatsapp/logout")
+async def whatsapp_logout():
+    """Desconecta o número atual; a bridge gera um QR Code novo para parear outro."""
+    from app.whatsapp.evolution_client import EvolutionAPIClient
+
+    if not await EvolutionAPIClient().logout():
+        raise HTTPException(status_code=502, detail="Não foi possível desconectar — a bridge está rodando?")
+    return {"ok": True}
 
 
 @app.post("/api/whatsapp/test")

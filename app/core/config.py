@@ -8,6 +8,14 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     SECRET_KEY: str = "change-me-in-production"
 
+    # Login do painel (/admin). Com DASHBOARD_PASSWORD vazio o painel fica sem
+    # login — só aceitável rodando localmente. O deploy/setup.sh gera a senha.
+    DASHBOARD_USER: str = "admin"
+    DASHBOARD_PASSWORD: str = ""
+    # Sites (fora do robô) que podem usar a API do painel, separados por vírgula.
+    # Ex.: https://robo-promo.vercel.app — o front hospedado na Vercel.
+    DASHBOARD_ALLOWED_ORIGINS: str = ""
+
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://user:pass@localhost:5432/robopromo"
 
@@ -41,6 +49,9 @@ class Settings(BaseSettings):
     EVOLUTION_API_URL: str = ""
     EVOLUTION_API_KEY: str = ""
     EVOLUTION_INSTANCE: str = ""
+    # Painel sobe o whatsapp-bridge sozinho quando ele não responde (uso local).
+    # No servidor o systemd cuida da bridge — o serviço do painel define False.
+    BRIDGE_AUTOSTART: bool = True
 
     # Canais de destino  [ {"id": "120363...", "type": "group"} ]
     WHATSAPP_CHANNELS: List[dict] = []
@@ -64,3 +75,11 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+def reload_settings() -> None:
+    """Relê o .env no objeto `settings` existente (os módulos importam a mesma instância).
+    Usado pelo robô a cada ciclo para aplicar o que foi salvo pelo painel sem reiniciar."""
+    fresh = Settings()
+    for name in Settings.model_fields:
+        setattr(settings, name, getattr(fresh, name))

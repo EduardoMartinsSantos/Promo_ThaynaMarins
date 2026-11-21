@@ -10,6 +10,7 @@ uvicorn[standard]>=0.30.0
 # Database
 sqlalchemy>=2.0.35
 asyncpg>=0.30.0
+aiosqlite>=0.20.0              # DATABASE_URL=sqlite+aiosqlite (padrão do .env)
 alembic>=1.13.1
 
 # HTTP / Scraping
@@ -24,3 +25,4 @@ flower>=2.0.1
 
 # Utils
 Pillow>=10.4.0
+certifi>=2024.8.30             # certificados HTTPS (Python do python.org no macOS não usa os do sistema)

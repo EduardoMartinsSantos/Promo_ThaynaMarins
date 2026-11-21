@@ -16,8 +16,12 @@
  * WhatsApp > Aparelhos conectados > Conectar um aparelho. A sessão fica
  * salva em ./auth_info e é reaproveitada nas próximas execuções.
  */
-require("dotenv").config({ quiet: true });
 const path = require("path");
+// .env próprio (opcional) e o .env do projeto — o primeiro valor encontrado vence.
+require("dotenv").config({
+  quiet: true,
+  path: [path.join(__dirname, ".env"), path.join(__dirname, "..", ".env")],
+});
 const fs = require("fs");
 const express = require("express");
 const qrcodeTerminal = require("qrcode-terminal");
@@ -32,11 +36,36 @@ const {
 } = require("@whiskeysockets/baileys");
 
 const PORT = process.env.PORT || 8080;
-const API_KEY = process.env.API_KEY || "troque-esta-chave";
+// Só escuta na própria máquina: painel e robô acessam via localhost; nada exposto na internet.
+const HOST = process.env.HOST || "127.0.0.1";
+// Mesma chave que o painel/robô usam (EVOLUTION_API_KEY do .env do projeto).
+const API_KEY = process.env.API_KEY || process.env.EVOLUTION_API_KEY || "troque-esta-chave";
 const AUTH_DIR = path.join(__dirname, "auth_info");
 
 let sock = null;
 let connectionState = "close";
+// QR Code atual em data URL (PNG base64) — exposto em GET /instance/qr para o painel.
+let currentQr = null;
+
+// Apaga a sessão salva e abre um socket novo, que vai emitir um QR Code novo.
+// Com logout=true, avisa o WhatsApp antes (remove o aparelho da lista do celular).
+async function resetSession({ logout = false } = {}) {
+  const old = sock;
+  const wasOpen = connectionState === "open";
+  sock = null;
+  currentQr = null;
+  connectionState = "close";
+  if (old) {
+    // Remove listeners antes do logout para o evento "close" não disparar outro reset.
+    old.ev.removeAllListeners();
+    if (logout && wasOpen) {
+      try { await old.logout(); } catch (_) { /* segue para o reset */ }
+    }
+    try { old.end(undefined); } catch (_) { /* socket já fechado */ }
+  }
+  fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+  await startSock();
+}
 
 async function startSock() {
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
@@ -54,6 +83,9 @@ async function startSock() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
+      qrcode.toDataURL(qr, { width: 300 }, (err, url) => {
+        if (!err) currentQr = url;
+      });
       const qrPath = path.join(__dirname, "qr.png");
       qrcode.toFile(qrPath, qr, { width: 300 }, (err) => {
         if (err) {
@@ -76,10 +108,12 @@ async function startSock() {
       if (shouldReconnect) {
         startSock();
       } else {
-        console.log("[WA] Sessão deslogada. Apague a pasta auth_info e reinicie para gerar um novo QR Code.");
+        console.log("[WA] Sessão deslogada. Gerando novo QR Code...");
+        resetSession().catch((err) => console.error("[WA] Erro ao reiniciar sessão:", err.message));
       }
     } else if (connection === "open") {
       connectionState = "open";
+      currentQr = null;
       console.log("[WA] Conectado com sucesso!");
     } else if (connection === "connecting") {
       connectionState = "connecting";
@@ -101,6 +135,22 @@ app.use((req, res, next) => {
 
 app.get("/instance/connectionState/:instance", (req, res) => {
   res.json({ instance: { instanceName: req.params.instance, state: connectionState } });
+});
+
+// Estado + QR Code atual (data URL) para o painel exibir a tela de pareamento.
+app.get("/instance/qr", (req, res) => {
+  res.json({ state: connectionState, qr: connectionState === "open" ? null : currentQr });
+});
+
+// Desconecta o número atual e gera um QR Code novo (para trocar de número).
+app.post("/instance/logout", async (req, res) => {
+  try {
+    await resetSession({ logout: true });
+    res.json({ status: "logged_out" });
+  } catch (err) {
+    console.error("[WA] Erro ao desconectar:", err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 app.post("/message/sendMedia/:instance", async (req, res) => {
@@ -145,6 +195,6 @@ app.get("/groups", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`[WA] Bridge HTTP rodando em http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`[WA] Bridge HTTP rodando em http://${HOST}:${PORT}`);
 });

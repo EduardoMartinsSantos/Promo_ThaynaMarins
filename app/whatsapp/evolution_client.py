@@ -79,6 +79,39 @@ class EvolutionAPIClient:
                 logger.error(f"[WA] Falha ao verificar conexão: {e}")
                 return False
 
+    async def get_qr(self) -> dict:
+        """
+        Helper exclusivo do whatsapp-bridge — estado da sessão + QR Code (data URL).
+        Retorna {"reachable": bool, "auth_ok": bool, "state": str, "qr": str | None}.
+        """
+        url = f"{self.base_url}/instance/qr"
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(url, headers=self.headers, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+                    if resp.status == 401:
+                        return {"reachable": True, "auth_ok": False, "state": "", "qr": None}
+                    if resp.status != 200:
+                        # Bridge antiga/outra API sem /instance/qr: cai no estado simples.
+                        connected = await self.check_connection()
+                        return {"reachable": True, "auth_ok": True,
+                                "state": "open" if connected else "close", "qr": None}
+                    data = await resp.json()
+                    return {"reachable": True, "auth_ok": True,
+                            "state": data.get("state", ""), "qr": data.get("qr")}
+            except Exception:
+                return {"reachable": False, "auth_ok": False, "state": "", "qr": None}
+
+    async def logout(self) -> bool:
+        """Helper exclusivo do whatsapp-bridge — desconecta o número e gera novo QR."""
+        url = f"{self.base_url}/instance/logout"
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.post(url, headers=self.headers, timeout=aiohttp.ClientTimeout(total=20)) as resp:
+                    return resp.status == 200
+            except Exception as e:
+                logger.error(f"[WA] Falha ao desconectar: {e}")
+                return False
+
     async def list_groups(self) -> list[dict]:
         """Helper exclusivo do whatsapp-bridge (Baileys) — lista grupos para achar o ID (@g.us)."""
         url = f"{self.base_url}/groups"

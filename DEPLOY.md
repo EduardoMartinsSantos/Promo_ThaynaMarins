@@ -1,142 +1,159 @@
-# Deploy — Robo-Promo (24/7, custo mínimo)
+# Colocar o Robo-Promo online (grátis, 24/7)
 
-Arquitetura atual (sem Docker, sem Postgres/Redis/Celery):
+> Tem um Mac que pode ficar ligado? Veja [DEPLOY-MAC.md](DEPLOY-MAC.md).
+> É mais simples que este guia e não precisa de conta na Oracle.
 
-| Processo                | O que faz                                         |
-|-------------------------|----------------------------------------------------|
-| `whatsapp-bridge` (Node) | Mantém a sessão do WhatsApp (Baileys) e expõe HTTP |
-| `run_local.py` (Python)  | Loop: scraping ML → filtro → envia via bridge      |
-| `robopromo.db` (SQLite)  | Banco local — guarda histórico/anti-spam            |
+Resultado final: o painel fica em `https://SEU-NOME.duckdns.org`, com login,
+e o robô roda o tempo todo, mesmo com seu PC desligado.
 
-Os dois processos rodam como serviços `systemd` (`Restart=always`), então
-sobrevivem a reboots e quedas.
+| Peça | Para que serve | Custo |
+|------|----------------|-------|
+| Oracle Cloud "Always Free" | Servidor ligado 24h | Grátis (pede cartão só para verificar identidade) |
+| DuckDNS | Endereço fácil (`seunome.duckdns.org`) | Grátis |
+| Caddy (instalado pelo script) | Cadeado HTTPS automático | Grátis |
 
----
+No servidor rodam 3 serviços, que reiniciam sozinhos após quedas e reboots:
 
-## 1. Crie o servidor (escolha um)
+| Serviço | O que faz |
+|---------|-----------|
+| `robopromo-bridge` | Mantém o WhatsApp conectado |
+| `robopromo-worker` | Robô: busca promoções e envia |
+| `robopromo-dashboard` | Painel de configuração (atrás do Caddy) |
 
-### Opção A — Oracle Cloud "Always Free" (US$0/mês)
-1. Crie conta em https://www.oracle.com/cloud/free/ (pede cartão para
-   verificação de identidade, mas não cobra nada nos recursos "Always Free").
-2. Menu → **Compute → Instances → Create Instance**.
-3. Shape: **Ampere A1 (ARM)** — escolha 1 OCPU / 6 GB RAM (cabe dentro do
-   limite gratuito de 4 OCPU / 24 GB).
-4. Imagem: **Ubuntu 22.04** (ou 24.04).
-5. Adicione/gere uma chave SSH e crie a instância.
-6. Anote o IP público. Usuário SSH padrão: `ubuntu`.
-
-> Se aparecer "Out of capacity" no shape Ampere, tente outra região/AD ou
-> tente novamente mais tarde — é um problema comum de disponibilidade do
-> tier gratuito, não um erro de configuração.
-
-### Opção B — Hetzner CX22 (~€4,5/mês, mais garantido)
-1. Crie conta em https://www.hetzner.com/cloud
-2. **Add Server** → Ubuntu 22.04 → tipo **CX22** → adicione sua chave SSH
-   → criar.
-3. Anote o IP público. Usuário SSH padrão: `root`.
+Tempo total: cerca de 30 minutos, só na primeira vez.
 
 ---
 
-## 2. Acesse via SSH
+## 1. Crie o servidor na Oracle
+
+1. Crie a conta em https://www.oracle.com/cloud/free/
+2. Menu ☰ → **Compute → Instances → Create instance**.
+3. **Image and shape → Edit**:
+   - Image: **Canonical Ubuntu 22.04** (ou 24.04).
+   - Shape: **Ampere → VM.Standard.A1.Flex**, 1 OCPU e 6 GB de memória.
+     Se der "Out of capacity", tente de novo mais tarde ou use
+     **VM.Standard.E2.1.Micro** (também grátis, mais fraco, mas funciona).
+4. **Add SSH keys → Generate a key pair for me → Save private key**.
+   Guarde o arquivo `.key` baixado; ele é a sua chave de acesso.
+5. **Create**. Quando ficar verde (Running), anote o **Public IP address**.
+
+### Libere as portas do site (80 e 443)
+
+1. Na página da instância, clique no link da **Subnet**.
+2. **Security Lists → Default Security List → Add Ingress Rules**:
+   - Source CIDR: `0.0.0.0/0`
+   - IP Protocol: `TCP`
+   - Destination Port Range: `80,443`
+3. **Add Ingress Rules**.
+
+---
+
+## 2. Crie o endereço no DuckDNS
+
+1. Entre em https://www.duckdns.org com sua conta Google ou GitHub.
+2. Em **sub domain**, digite um nome (ex.: `meurobo`) e clique **add domain**.
+3. No campo **current ip** desse domínio, cole o IP público da Oracle e
+   clique **update ip**.
+
+Seu endereço será `meurobo.duckdns.org`.
+
+---
+
+## 3. Envie o projeto (no seu PC, PowerShell)
+
+Na pasta do projeto. Troque `C:\caminho\da\chave.key` e `SEU_IP`:
 
 ```powershell
-ssh ubuntu@SEU_IP        # Oracle
-# ou
-ssh root@SEU_IP          # Hetzner
+# A chave precisa ser só sua, senão o ssh recusa ("UNPROTECTED PRIVATE KEY FILE")
+icacls "C:\caminho\da\chave.key" /inheritance:r /grant:r "$($env:USERNAME):R"
+
+# Empacota o projeto (sem dependências e sem a sessão local do WhatsApp)
+tar --exclude=node_modules --exclude=.venv --exclude=__pycache__ --exclude=whatsapp-bridge/auth_info --exclude=whatsapp-bridge/.env --exclude=whatsapp-bridge/bridge.log --exclude=whatsapp-bridge/qr.png -czf "$env:TEMP\robopromo.tar.gz" .
+
+scp -i "C:\caminho\da\chave.key" "$env:TEMP\robopromo.tar.gz" ubuntu@SEU_IP:/tmp/
 ```
+
+O pacote leva o seu `.env` (credenciais do ML e da Shopee) e o
+`robopromo.db` (histórico anti-repetição).
 
 ---
 
-## 3. Envie o projeto para o servidor
-
-No seu PC (PowerShell), a partir da pasta do projeto:
+## 4. Instale no servidor
 
 ```powershell
-# Cria um pacote sem node_modules / .venv / banco temporário
-tar --exclude='whatsapp-bridge/node_modules' --exclude='.venv' --exclude='__pycache__' -czf robopromo.tar.gz .
-
-scp robopromo.tar.gz ubuntu@SEU_IP:/tmp/
+ssh -i "C:\caminho\da\chave.key" ubuntu@SEU_IP
 ```
 
-No servidor:
+Já dentro do servidor (troque `meurobo` pelo seu nome):
 
 ```bash
 sudo mkdir -p /opt/robopromo
 sudo tar -xzf /tmp/robopromo.tar.gz -C /opt/robopromo
 cd /opt/robopromo
+sudo sed -i 's/\r$//' deploy/setup.sh deploy/*.service
+sudo bash deploy/setup.sh meurobo.duckdns.org
 ```
 
-### Envie a sessão do WhatsApp e o banco (preserva o que já está rodando)
-
-Isso evita escanear o QR Code de novo e mantém o histórico anti-spam:
-
-```powershell
-scp -r whatsapp-bridge\auth_info ubuntu@SEU_IP:/tmp/auth_info
-scp robopromo.db ubuntu@SEU_IP:/tmp/robopromo.db
-```
-
-No servidor:
-
-```bash
-cp -r /tmp/auth_info /opt/robopromo/whatsapp-bridge/auth_info
-cp /tmp/robopromo.db /opt/robopromo/robopromo.db
-```
+No fim, o script mostra o endereço, o **usuário** e a **senha** do painel.
+Anote os três.
 
 ---
 
-## 4. Configure o `.env`
+## 5. Configure pelo painel
 
-O `.env` enviado já tem suas credenciais. Confira/ajuste:
+1. Abra `https://meurobo.duckdns.org` e entre com o usuário e a senha.
+   No primeiro acesso, o cadeado HTTPS pode levar até 1 minuto para ficar pronto.
+2. Card **WhatsApp → 1. Conectar número**: escaneie o QR Code com o celular.
+3. **2. Grupos de destino → Escolher grupos**: marque os grupos e salve.
+4. **3. Testar**: envie a mensagem de teste.
 
-```bash
-cd /opt/robopromo
-nano .env
-```
+O robô aplica o que você salvar no painel a partir do próximo ciclo. Não
+precisa reiniciar nada.
 
-- `EVOLUTION_API_URL=http://localhost:8080` (bridge roda no mesmo servidor)
-- `WHATSAPP_CHANNELS` — grupo(s) de destino
-- `ML_ACCESS_TOKEN` / `ML_REFRESH_TOKEN` — **importante**: rode
-  `python get_token.py` localmente antes do deploy (ou no servidor) para
-  garantir que `ML_REFRESH_TOKEN` está preenchido. Sem ele, o token expira
-  em ~6h e o bot para de capturar promoções.
-
----
-
-## 5. Rode o setup
-
-```bash
-cd /opt/robopromo
-chmod +x deploy/setup.sh
-sudo ./deploy/setup.sh
-```
-
-Isso instala Node 20, Python venv, dependências, cria o usuário de serviço
-`robopromo`, e sobe os dois serviços via `systemd` (`enable --now`, ou seja,
-já inicia e fica ativo após reboot).
-
----
-
-## 6. Verifique
-
-```bash
-systemctl status robopromo-bridge robopromo-worker
-
-journalctl -u robopromo-bridge -f   # logs do WhatsApp
-journalctl -u robopromo-worker -f   # logs do scraper/ciclo
-```
-
-Se o bridge perder a sessão (raro, já que `auth_info/` foi copiado), os
-logs mostrarão um novo QR Code em `whatsapp-bridge/qr.png` — baixe com
-`scp` e escaneie de novo.
+**Depois disso, pare o robô e o painel no seu PC.** Senão as promoções
+saem duplicadas.
 
 ---
 
 ## Manutenção
 
-```bash
-# Reiniciar após alterar .env ou código
-sudo systemctl restart robopromo-worker
-sudo systemctl restart robopromo-bridge
+Ver a senha do painel de novo (no servidor):
 
-# Atualizar código (repita o passo 3 e reinicie os serviços)
+```bash
+sudo grep DASHBOARD_ /opt/robopromo/.env
 ```
+
+Ver logs e status:
+
+```bash
+systemctl status robopromo-bridge robopromo-worker robopromo-dashboard
+journalctl -u robopromo-worker -f      # robô
+journalctl -u robopromo-bridge -f      # WhatsApp
+```
+
+### Atualizar o código
+
+Repita o passo 3 com o comando `tar` abaixo. Ele não leva o `.env` nem o
+banco, para não apagar o que já está configurado no servidor:
+
+```powershell
+tar --exclude=node_modules --exclude=.venv --exclude=__pycache__ --exclude=whatsapp-bridge/auth_info --exclude=whatsapp-bridge/.env --exclude=whatsapp-bridge/bridge.log --exclude=whatsapp-bridge/qr.png --exclude=.env --exclude=robopromo.db -czf "$env:TEMP\robopromo.tar.gz" .
+```
+
+Depois, no servidor, rode os mesmos comandos do passo 4. O `setup.sh` pode
+ser rodado quantas vezes precisar.
+
+### Token do Mercado Livre
+
+Confira se `ML_REFRESH_TOKEN` está preenchido no `.env` antes de enviar.
+Se não estiver, rode `python get_token.py` no seu PC. Sem esse token, o
+acesso expira em cerca de 6h e o robô para de capturar promoções.
+
+### Rodar só no seu PC (sem servidor)
+
+```powershell
+python -m uvicorn app.dashboard.main:app --port 8000   # painel + WhatsApp
+python run_local.py                                     # robô
+```
+
+Abra `http://127.0.0.1:8000`. O painel sobe a bridge do WhatsApp sozinho.
